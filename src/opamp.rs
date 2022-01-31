@@ -369,7 +369,7 @@ impl<'a> OP2<'a> {
 
         // set OPA_RANGE = 1 (VDDA > 2.4V) by default, if ADC1 is not enabled
         // if a lower voltage is applied, use an instance of ADC1 to clear the opa_range bit
-        if range.read().opaen().bit_is_clear() {
+        if range.read().opaen().bit_is_clear() == true {
             range.modify(|_, w| w.opa_range().set_bit()); // else expect bit is set correct
         } 
         OP2 {
@@ -529,7 +529,8 @@ impl<'a> opamp_trait::ConfigOpamp for OP2<'a> {
         }
 
         // increase calibration reg N till it toggles
-        while self.csr.read().calout().bit_is_set() == false {
+        for _i in 0..32 {
+        // while self.csr.read().calout().bit_is_set() == false {
             let t_val: u8;
             if low_poer_mode == true {
                 t_val = self.lpotr.read().trimlpoffsetn().bits();
@@ -543,6 +544,9 @@ impl<'a> opamp_trait::ConfigOpamp for OP2<'a> {
             }
             // wait at least 1ms to new config to settle
             delay.delay_us(1200);
+            if self.csr.read().calout().bit_is_set() == false {
+                break
+            }
         }
 
         // select NMOS calibration first
@@ -555,7 +559,8 @@ impl<'a> opamp_trait::ConfigOpamp for OP2<'a> {
             self.otr.modify(|_, w| unsafe {w.trimoffsetp().bits(0b00000)});
         }
         // increase calibration reg P till it toggles
-        while self.csr.read().calout().bit_is_set() == false {
+        for _i in 0..32 {
+        // while self.csr.read().calout().bit_is_set() == false {
             let t_val: u8;
             if low_poer_mode == true {
                 t_val = self.lpotr.read().trimlpoffsetp().bits();
@@ -570,6 +575,9 @@ impl<'a> opamp_trait::ConfigOpamp for OP2<'a> {
             }
             // wait for at least 1ms to settle of Configuration
             delay.delay_us(1200);
+            if self.csr.read().calout().bit_is_set() == false {
+                break
+            }
         }
         // set opamp into callibration mode
         self.csr.modify(|_, w| w.calon().clear_bit());
