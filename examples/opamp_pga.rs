@@ -41,7 +41,7 @@ fn main() -> ! {
                             &rcc.apb1r1);
 
     // set operation models
-    op1.set_opamp_oper_mode(OperationMode::PgaADC1);
+    op1.set_opamp_oper_mode(OperationMode::Pga);
     // set pga gain to 8
     op1.set_pga_gain(1);
     op1.enable(true);

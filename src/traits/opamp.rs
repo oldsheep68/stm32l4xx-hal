@@ -13,15 +13,9 @@ pub enum OperationMode {
     // wrong values provided
     External,
     // PGA mode, (configurable gain) connected to an ADC
-    PgaADC1,
+    Pga,
     // pga mode with external filter connected
-    PgaADC1ExternalFiltering,
-    // PGA mode, (configurable gain) connected to an ADC
-    PgaADC2,
-    // pga mode with external filter connected
-    PgaADC2ExternalFiltering,
-    // // Calibration Modes
-    // CalibrationMode,
+    PgaExternalFiltering,
     // added, that warnings for global match pattern are suppressed
     SuppressMachtWarnings,
 }

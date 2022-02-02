@@ -44,6 +44,9 @@ macro_rules! opamps {
             }
 
             impl<'a> $op<'a> {
+
+                /// Create a new OPAMP instance. the default range is always set to >2.4V so that the device is
+                /// not damaged at first call on typical eval-boards from ST
                 pub fn new(
                     csr: &'a $csr_ty,
                     otr: &'a $otr_ty,
@@ -93,6 +96,9 @@ macro_rules! opamps {
             }
 
             impl<'a> opamp_trait::ConfigOpamp for $op<'a> {
+
+                /// Set operation mode, External is the defalult mode, where all signals are routed to pins
+                /// and must be configured connected to define the function of the opamp
                 fn set_opamp_oper_mode(&self, opmode: opamp_trait::OperationMode) -> opamp_trait::Result {
 
                     match opmode {
@@ -107,7 +113,7 @@ macro_rules! opamps {
                                 self.csr.modify(|_, w| unsafe {w.vm_sel().bits(0b00)});
                                 Ok(())
                         },
-                        opamp_trait::OperationMode::PgaADC1 => {
+                        opamp_trait::OperationMode::Pga => {
                                 // disable OPEAN (before changeing anything else)
                                 self.csr.modify(|_, w| w.opaen().clear_bit());
                                 // set OPAMODE = 3 // follower mode = pga gain = 1
@@ -118,7 +124,7 @@ macro_rules! opamps {
                                 self.csr.modify(|_, w| unsafe {w.vm_sel().bits(0b10)});
                                 Ok(())
                         },
-                        opamp_trait::OperationMode::PgaADC1ExternalFiltering => {
+                        opamp_trait::OperationMode::PgaExternalFiltering => {
                                 // disable OPEAN (before changeing anything else)
                                 self.csr.modify(|_, w| w.opaen().clear_bit());
                                 // set OPAMODE = 2 // pga mode = pga, gain = 2..16 (no filtering in follower mode)
@@ -133,6 +139,7 @@ macro_rules! opamps {
                     }
                 }
 
+                /// Connect the input pins of the opamp to DAC or internnaly to follower or leakage-input
                 fn conect_inputs(&self, vinp: opamp_trait::VINP, vinm: opamp_trait::VINM) -> opamp_trait::Result {
                     match vinp {
                         opamp_trait::VINP::ExternalPin1 => {
@@ -163,7 +170,8 @@ macro_rules! opamps {
                     Ok(())
                 }
 
-                
+                /// Set the gain in pga mode, the device supports
+                /// the values 1, 2, 4, 8, 16 all other values are ignored
                 fn set_pga_gain(&self, gain: u16) -> opamp_trait::Result {
                     let opaen_state: bool = self.csr.read().opaen().bit_is_set();
                     // disable OPEAN (before changeing anything else)
@@ -208,7 +216,13 @@ macro_rules! opamps {
                     Ok(())
                 }
 
+                /// the function preserves the enable state
+                /// when the function is called and the opamp is enabled, it is disabled 
+                /// and reenabled after switch the power mode. 
+                /// short incontinous signals may occrue
                 fn set_power_mode(&self, power_mode: opamp_trait::PowerMode) -> opamp_trait::Result {
+                    let ena_state = self.csr.read().opaen().bit_is_set();
+                    self.enable(false);
                     match power_mode {
                         opamp_trait::PowerMode::Normal => {
                             // set normal mode
@@ -220,14 +234,24 @@ macro_rules! opamps {
                         },
                         _ => return Err(opamp_trait::Error::NotImplemented),
                     };
+                    if ena_state {
+                        self.enable(true);
+                    }
+                    
                     Ok(())
                 }
 
-                /// Calibration must be called for low power and normal mode separately if bothe
+                /// For the calibration to work, the opamp must be enabled and in 
+                /// Calibration must be called for low power and normal mode separately if both
                 /// are needed
-                /// to performe a calibration, it is important, that the opamp is enabled
-                /// and that the USERTRIM is set too
+                /// USERTRIM is preserved as it is before calling calibrate()
+                /// the driven load must be below 500uA during calibration
+                /// and must not be in external filtering mode and PGA-GAIN=1
                 fn calibrate(&self, delay: &mut impl DelayUs<u32>) -> opamp_trait::Result {
+                    // get USERTRIM bit value
+                    let usertrim = self.csr.read().usertrim().bit();
+                    // set usertrim bit, so that calibration is possible
+                    self.csr.modify(|_, w| w.usertrim().bit(true));
                     // set opamp into callibration mode
                     self.csr.modify(|_, w| w.calon().set_bit());
                     // select PMOS calibration first
@@ -258,15 +282,16 @@ macro_rules! opamps {
                         if self.csr.read().calout().bit_is_set() == false {
                             break;
                         }
-                        // if this point is reached, an the flag didn't change over the whole range
-                        // return Err(opamp_trait::Error::CalibrationError);
                     }
+                    // if this point is reached, an the flag didn't change over the whole range
+                    if self.csr.read().calout().bit_is_set() == true {
+                        return Err(opamp_trait::Error::CalibrationError);
+                    } 
 
                     // select NMOS calibration first
                     self.csr.modify(|_, w| w.calsel().clear_bit());
                     // increase calibration reg N till it toggles
                     for i in 0..32 {
-                        let t_val: u8;
                         if low_poer_mode == true {
                             self.lpotr.modify(|_, w| unsafe {w.trimlpoffsetn().bits(i)});
                         } else {
@@ -278,15 +303,19 @@ macro_rules! opamps {
                         if self.csr.read().calout().bit_is_set() == true {
                             break
                         }
-                        // if this point is reached, an the flag didn't change over the whole range
-                        // return Err(opamp_trait::Error::CalibrationError);
+                    }
+                    if self.csr.read().calout().bit_is_set() == false {
+                        return Err(opamp_trait::Error::CalibrationError);
                     }
                     // set opamp into normal mode
                     self.csr.modify(|_, w| w.calon().clear_bit());
+                    // restore usertrim bit as it was before caling calibrate()
+                    self.csr.modify(|_, w| w.usertrim().bit(usertrim));
                     
                     Ok(())
                 }
-
+                /// in calibration mode the calibrated values are used, which were set with calibrate()
+                /// default is using factory trimmed values which should be good for room temperatures
                 fn set_calibration_mode(&self, usertrim: bool){
                     if usertrim {
                         self.csr.modify(|_, w| w.usertrim().set_bit());
@@ -295,6 +324,7 @@ macro_rules! opamps {
                     }
                 }
 
+                /// enable the opamp
                 fn enable(&self, en: bool) {
                     compiler_fence(Ordering::SeqCst);
                     if en {
