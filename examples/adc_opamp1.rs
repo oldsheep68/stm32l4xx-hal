@@ -28,7 +28,6 @@ fn main() -> ! {
     // OPAMP1_VINP
     let mut pa0 = gpioa.pa0.into_analog(&mut gpioa.moder, &mut gpioa.pupdr);
 
-
     let mut delay = Delay::new(cp.SYST, clocks);
     let mut adc = ADC::new(
         dp.ADC1,
@@ -41,17 +40,18 @@ fn main() -> ! {
     let mut opamp1_out = adc.enable_opamp1_out();
 
     let ops = dp.OPAMP;
-    let op1: OP1 = OP1::new(& ops.opamp1_csr, 
-        & ops.opamp1_otr, 
-        & ops.opamp1_lpotr, 
-        & ops.opamp1_csr, 
-        &rcc.apb1r1);
-    
+    let op1: OP1 = OP1::new(
+        &ops.opamp1_csr,
+        &ops.opamp1_otr,
+        &ops.opamp1_lpotr,
+        &ops.opamp1_csr,
+        &rcc.apb1r1,
+    );
+
     op1.set_opamp_oper_mode(OperationMode::Pga);
     // set pga gain
     op1.set_pga_gain(16);
     op1.enable(true);
-
 
     rprintln!(" done.");
 

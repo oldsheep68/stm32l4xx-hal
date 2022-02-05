@@ -1,11 +1,9 @@
-
-use crate::stm32::{opamp::*};
-use crate::traits::opamp as opamp_trait;
+use crate::hal::blocking::delay::DelayUs;
 use crate::rcc::APB1R1; //{Enable, Reset, APB1R1, CCIPR};
-use crate::hal::{blocking::delay::DelayUs,};
+use crate::stm32::opamp::*;
+use crate::traits::opamp as opamp_trait;
 
 use core::sync::atomic::{compiler_fence, Ordering};
-
 
 // // s.common.ccr.modify(|_, w| w.vrefen().clear_bit());
 // // self.csr.modify(|_, w| w.opaen().clear_bit());
@@ -19,10 +17,6 @@ use core::sync::atomic::{compiler_fence, Ordering};
 // // let en = self.csr.read().opaen().bit_is_set();
 // // self.csr.modify(|_, w| w.opaen().clear_bit());
 // // let mode = self.csr.read().opamode().bits() as u8;
-
-
-
-
 
 macro_rules! opamps {
     (
@@ -63,7 +57,7 @@ macro_rules! opamps {
                     // if a lower voltage is applied, use an instance of ADC1 to clear the opa_range bit
                     if range.read().opaen().bit_is_clear() == true {
                         range.modify(|_, w| w.opa_range().set_bit()); // else expect bit is set correct
-                    } 
+                    }
                     compiler_fence(Ordering::SeqCst);
                     $op {
                         csr: csr,
@@ -74,7 +68,7 @@ macro_rules! opamps {
 
                 }
 
-                /// opa range specifice the VDDA voltage applied to the device. 
+                /// opa range specifice the VDDA voltage applied to the device.
                 /// Is valied for both OP, if there are two in the device
                 /// it is by default set to >2.4V (high)
                 /// do not use this function, if you do not know, what you are decoding
@@ -162,7 +156,7 @@ macro_rules! opamps {
                             self.csr.modify(|_, w| unsafe {w.vm_sel().bits(0b01)});
                         },
                         opamp_trait::VINM::PGA=> {
-                            // VM_SEL = 10 
+                            // VM_SEL = 10
                             self.csr.modify(|_, w| unsafe {w.vm_sel().bits(0b10)});
                         },
                         _ => return Err(opamp_trait::Error::NotImplemented),
@@ -217,8 +211,8 @@ macro_rules! opamps {
                 }
 
                 /// the function preserves the enable state
-                /// when the function is called and the opamp is enabled, it is disabled 
-                /// and reenabled after switch the power mode. 
+                /// when the function is called and the opamp is enabled, it is disabled
+                /// and reenabled after switch the power mode.
                 /// short incontinous signals may occrue
                 fn set_power_mode(&self, power_mode: opamp_trait::PowerMode) -> opamp_trait::Result {
                     let ena_state = self.csr.read().opaen().bit_is_set();
@@ -237,11 +231,11 @@ macro_rules! opamps {
                     if ena_state {
                         self.enable(true);
                     }
-                    
+
                     Ok(())
                 }
 
-                /// For the calibration to work, the opamp must be enabled and in 
+                /// For the calibration to work, the opamp must be enabled and in
                 /// Calibration must be called for low power and normal mode separately if both
                 /// are needed
                 /// USERTRIM is preserved as it is before calling calibrate()
@@ -275,7 +269,7 @@ macro_rules! opamps {
                         } else {
                             self.otr.modify(|_, w| unsafe {w.trimoffsetp().bits(i)});
                         }
-                        
+
                         compiler_fence(Ordering::SeqCst);
                         // wait at least 1ms to new config to settle
                         delay.delay_us(1200);
@@ -286,7 +280,7 @@ macro_rules! opamps {
                     // if this point is reached, an the flag didn't change over the whole range
                     if self.csr.read().calout().bit_is_set() == true {
                         return Err(opamp_trait::Error::CalibrationError);
-                    } 
+                    }
 
                     // select NMOS calibration first
                     self.csr.modify(|_, w| w.calsel().clear_bit());
@@ -311,7 +305,7 @@ macro_rules! opamps {
                     self.csr.modify(|_, w| w.calon().clear_bit());
                     // restore usertrim bit as it was before caling calibrate()
                     self.csr.modify(|_, w| w.usertrim().bit(usertrim));
-                    
+
                     Ok(())
                 }
                 /// in calibration mode the calibrated values are used, which were set with calibrate()
@@ -338,7 +332,6 @@ macro_rules! opamps {
     }
 
 }
-
 
 opamps!(
     OP1, OPAMP1_CSR, OPAMP1_OTR, OPAMP1_LPOTR, OPAMP1_CSR;
