@@ -148,6 +148,8 @@ pub mod gpio;
 pub mod i2c;
 #[cfg(not(any(feature = "stm32l4r9", feature = "stm32l4s9",)))]
 pub mod lptimer;
+#[cfg(not(any(feature = "stm32l4r9", feature = "stm32l4s9",)))]
+pub mod opamp;
 #[cfg(all(
     feature = "otg_fs",
     any(
@@ -159,8 +161,6 @@ pub mod lptimer;
     )
 ))]
 pub mod otg_fs;
-#[cfg(not(any(feature = "stm32l4r9", feature = "stm32l4s9",)))]
-pub mod opamp;
 #[cfg(not(any(feature = "stm32l4r9", feature = "stm32l4s9",)))]
 pub mod prelude;
 #[cfg(not(any(feature = "stm32l4r9", feature = "stm32l4s9",)))]
