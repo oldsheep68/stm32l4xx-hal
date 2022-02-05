@@ -3,20 +3,20 @@
 #![no_main]
 #![no_std]
 
-use volatile_register::{RW, RO};
+// use volatile_register::{RO, RW};
 
 extern crate panic_halt;
 
 // use cortex_m::asm;
 use cortex_m_rt::entry;
 use rtt_target::{rprint, rprintln};
-use stm32l4xx_hal::{opamp::*, prelude::*, pac};
 use stm32l4xx_hal;
+use stm32l4xx_hal::{opamp::*, pac, prelude::*};
 
 use stm32l4xx_hal::traits::opamp::*;
 
 // use embedded_hal::*;
-use embedded_hal::{blocking::delay::DelayUs,};
+use embedded_hal::blocking::delay::DelayUs;
 //use stm32l4xx_hal::delay::Delay;
 // use stm32l4xx_hal::delay::DelayCM;
 use stm32l4xx_hal::*;
@@ -25,7 +25,6 @@ use core::sync::atomic::{compiler_fence, Ordering};
 
 #[entry]
 fn main() -> ! {
-
     rtt_target::rtt_init_print!();
     // rprint!("Initializing...");
 
@@ -49,7 +48,9 @@ fn main() -> ! {
     // OPAMP1_VOUT
     let mut _pa3 = gpioa.pa3.into_analog(&mut gpioa.moder, &mut gpioa.pupdr);
 
-    let mut _pa7 = gpioa.pa7.into_push_pull_output(&mut gpioa.moder, &mut gpioa.otyper);
+    let mut _pa7 = gpioa
+        .pa7
+        .into_push_pull_output(&mut gpioa.moder, &mut gpioa.otyper);
 
     _pa7.set_high();
 
@@ -64,23 +65,20 @@ fn main() -> ! {
 
     let ops = dp.OPAMP;
 
-
-
     //ops.opamp1_csr.opaen;
-    let op1: OP1 = OP1::new(& ops.opamp1_csr,
-                            & ops.opamp1_otr,
-                            & ops.opamp1_lpotr,
-                            & ops.opamp1_csr,
-                            &rcc.apb1r1,
-                            );
+    let op1: OP1 = OP1::new(
+        &ops.opamp1_csr,
+        &ops.opamp1_otr,
+        &ops.opamp1_lpotr,
+        &ops.opamp1_csr,
+        &rcc.apb1r1,
+    );
 
-    
     // set operation models
     let _ret = op1.set_opamp_oper_mode(OperationMode::External).unwrap();
     // let _ret = op1.set_opamp_oper_mode(OperationMode::Pga).unwrap();
     compiler_fence(Ordering::SeqCst);
     // ops.opamp1_csr.modify(|_, w| unsafe {w.opa_range().set_bit()});
-    
 
     compiler_fence(Ordering::SeqCst);
 
@@ -92,26 +90,24 @@ fn main() -> ! {
     // op1.enable(true);
     delay.delay_ms(1000_u32);
 
-    
     // let _ret = op1.set_opamp_oper_mode(OperationMode::Pga).unwrap();
     // calibrate the opamp in normal mode, since it has not been switched to low power mode
     op1.calibrate(&mut delay).unwrap();
-
 
     op1.enable(false);
 
     let _ret = op1.set_opamp_oper_mode(OperationMode::Pga).unwrap();
     op1.enable(true);
     op1.set_pga_gain(16);
-    
 
     // ops.opamp1_csr.modify(|_, w| unsafe {w.opaen().set_bit()});
-   
-    
 
     // rprintln!("opamode OP1: {}\n", ops.opamp1_csr.read().opamode().bits() as u8);
     // rprintln!("opaen: {}\n", ops.opamp1_csr.read().opaen().bits() as u8);
-    rprintln!("opa_range: {}\n", ops.opamp1_csr.read().opa_range().bits() as u8);
+    rprintln!(
+        "opa_range: {}\n",
+        ops.opamp1_csr.read().opa_range().bits() as u8
+    );
     // rprintln!("vp_sel: {}\n", ops.opamp1_csr.read().vp_sel().bits() as u8);
     // rprintln!("vm_sel: {}\n", ops.opamp1_csr.read().vm_sel().bits() as u8);
     // rprintln!("opalpm: {}\n", ops.opamp1_csr.read().opalpm().bits() as u8);
@@ -120,7 +116,6 @@ fn main() -> ! {
     // rprintln!("calsel: {}\n", ops.opamp1_csr.read().calsel().bits() as u8);
     // rprintln!("usertrim: {}\n", ops.opamp1_csr.read().usertrim().bits() as u8);
     // rprintln!("pga_gain: {}\n", ops.opamp1_csr.read().pga_gain().bits() as u8);
-
 
     // rprintln!("pa0 moder 0: {}\n", dp.GPIOA.moder.read().moder0().bits() as u8);
     // rprintln!("pa0 otyper 0: {}\n", dp.GPIOA.otyper.read().ot0().bits() as u8);
@@ -146,14 +141,13 @@ fn main() -> ! {
     // rprintln!("pa7 otyper 0: {}\n", dp.GPIOA.otyper.read().ot7().bits() as u8);
     // rprintln!("pa7 pupdr 0: {}\n", dp.GPIOA.pupdr.read().pupdr7().bits() as u8);
     // rprintln!("pa7 afrl 0: {}\n", dp.GPIOA.afrl.read().afrl7().bits() as u8);
-   
+
     // rprintln!("pb0 moder 0: {}\n", dp.GPIOB.moder.read().moder0().bits() as u8);
     // rprintln!("pb0 otyper 0: {}\n", dp.GPIOB.otyper.read().ot0().bits() as u8);
     // rprintln!("pb0 pupdr 0: {}\n", dp.GPIOB.pupdr.read().pupdr0().bits() as u8);
     // rprintln!("pb0 afrl 0: {}\n", dp.GPIOB.afrl.read().afrl0().bits() as u8);
-    
+
     // self.csr.modify(|_, w| unsafe {w.opamode().bits(0b00)});
-    
 
     // compiler_fence(Ordering::Release);
 
@@ -171,7 +165,7 @@ fn main() -> ! {
 
     // fn get_time() -> u32 {
     //     let systick = get_systick();
-        
+
     //     systick.cvr.read()
     // }
     // // rprintln!("systick: {}\n", get_time());
@@ -189,12 +183,10 @@ fn main() -> ! {
 
     // fn get_reg() -> u32 {
     //     let opamp1 = get_opamp1_csr();
-        
+
     //     opamp1.csr.read()
     // }
     // rprintln!("opamp1_csr: {}\n", get_reg());
 
-    loop {
-
-    }
+    loop {}
 }
