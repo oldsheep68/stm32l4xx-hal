@@ -262,16 +262,13 @@ impl ADC {
 
     /// Get the `Opamp1Out`
     pub fn enable_opamp1_out(&mut self) -> Opamp1Out {
-        
         Opamp1Out {}
     }
 
     /// Get the `Opamp2Out`
     pub fn enable_opamp2_out(&mut self) -> Opamp2Out {
-        
         Opamp2Out {}
     }
-
 
     /// Calculates the system VDDA by sampling the internal VREF channel and comparing
     /// the result with the value stored at the factory. If the chip's VDDA is not stable, run
@@ -957,7 +954,6 @@ macro_rules! adc_pins {
         )*
     };
 }
-
 
 // smprx : sample time main register
 // smpx  : smple tim channel value register
