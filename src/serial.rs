@@ -16,6 +16,7 @@ use crate::dma::{
     dma1, CircBuffer, DMAFrame, FrameReader, FrameSender, Receive, RxDma, TransferPayload,
     Transmit, TxDma,
 };
+use crate::dmamux::{DmaInput, DmaMux};
 use crate::gpio::{self, Alternate, OpenDrain, PushPull};
 use crate::pac;
 use crate::rcc::{Clocks, Enable, RccBus, Reset};
@@ -194,6 +195,15 @@ impl Default for Config {
     }
 }
 
+impl From<Bps> for Config {
+    fn from(baudrate: Bps) -> Config {
+        Config {
+            baudrate,
+            ..Default::default()
+        }
+    }
+}
+
 /// Serial abstraction
 pub struct Serial<USART, PINS> {
     usart: USART,
@@ -216,8 +226,8 @@ macro_rules! hal {
         $USARTX:ident: (
             $usartX:ident,
             $pclkX:ident,
-            tx: ($txdma:ident, $dmacst:ident, $dmatxch:path),
-            rx: ($rxdma:ident, $dmacsr:ident, $dmarxch:path)
+            tx: ($txdma:ident, $dmatxch:path, $dmatxsel:path),
+            rx: ($rxdma:ident, $dmarxch:path, $dmarxsel:path)
         ),
     )+) => {
         $(
@@ -240,13 +250,15 @@ macro_rules! hal {
                 pub fn $usartX(
                     usart: pac::$USARTX,
                     pins: PINS,
-                    config: Config,
+                    config: impl Into<Config>,
                     clocks: Clocks,
                     apb: &mut <pac::$USARTX as RccBus>::Bus,
                 ) -> Self
                 where
                     PINS: Pins<pac::$USARTX>,
                 {
+                    let config = config.into();
+
                     // enable or reset $USARTX
                     <pac::$USARTX>::enable(apb);
                     <pac::$USARTX>::reset(apb);
@@ -259,7 +271,7 @@ macro_rules! hal {
                     // Configure baud rate
                     match config.oversampling {
                         Oversampling::Over8 => {
-                            let uartdiv = 2 * clocks.$pclkX().0 / config.baudrate.0;
+                            let uartdiv = 2 * clocks.$pclkX().raw() / config.baudrate.0;
                             assert!(uartdiv >= 16, "impossible baud rate");
 
                             let lower = (uartdiv & 0xf) >> 1;
@@ -269,7 +281,7 @@ macro_rules! hal {
                             usart.brr.write(|w| unsafe { w.bits(brr) });
                         }
                         Oversampling::Over16 => {
-                            let brr = clocks.$pclkX().0 / config.baudrate.0;
+                            let brr = clocks.$pclkX().raw() / config.baudrate.0;
                             assert!(brr >= 16, "impossible baud rate");
 
                             usart.brr.write(|w| unsafe { w.bits(brr) });
@@ -710,9 +722,7 @@ macro_rules! hal {
                     self.channel.set_transfer_length(len as u16);
 
                     // Tell DMA to request from serial
-                    self.channel.cselr().modify(|_, w| {
-                        w.$dmacsr().map2()
-                    });
+                    self.channel.set_request_line($dmarxsel).unwrap();
 
                     self.channel.ccr().modify(|_, w| {
                         w
@@ -765,9 +775,7 @@ macro_rules! hal {
                     self.channel.set_transfer_length(buf.max_len() as u16);
 
                     // Tell DMA to request from serial
-                    self.channel.cselr().modify(|_, w| {
-                        w.$dmacsr().map2()
-                    });
+                    self.channel.set_request_line($dmarxsel).unwrap();
 
                     self.channel.ccr().modify(|_, w| {
                         w
@@ -812,9 +820,7 @@ macro_rules! hal {
                     self.channel.set_peripheral_address(&usart.tdr as *const _ as u32, false);
 
                     // Tell DMA to request from serial
-                    self.channel.cselr().modify(|_, w| {
-                        w.$dmacst().map2()
-                    });
+                    self.channel.set_request_line($dmatxsel).unwrap();
 
                     self.channel.ccr().modify(|_, w| unsafe {
                         w.mem2mem()
@@ -841,13 +847,13 @@ macro_rules! hal {
 }
 
 hal! {
-    USART1: (usart1, pclk2, tx: (TxDma1, c4s, dma1::C4), rx: (RxDma1, c5s, dma1::C5)),
-    USART2: (usart2, pclk1, tx: (TxDma2, c7s, dma1::C7), rx: (RxDma2, c6s, dma1::C6)),
+    USART1: (usart1, pclk2, tx: (TxDma1, dma1::C4, DmaInput::Usart1Tx), rx: (RxDma1, dma1::C5, DmaInput::Usart1Rx)),
+    USART2: (usart2, pclk1, tx: (TxDma2, dma1::C7, DmaInput::Usart2Tx), rx: (RxDma2, dma1::C6, DmaInput::Usart2Rx)),
 }
 
 #[cfg(not(any(feature = "stm32l432", feature = "stm32l442")))]
 hal! {
-    USART3: (usart3, pclk1, tx: (TxDma3, c2s, dma1::C2), rx: (RxDma3, c3s, dma1::C3)),
+    USART3: (usart3, pclk1, tx: (TxDma3, dma1::C2, DmaInput::Usart3Tx), rx: (RxDma3, dma1::C3, DmaInput::Usart3Rx)),
 }
 
 #[cfg(any(
@@ -871,7 +877,7 @@ hal! {
     feature = "stm32l4s9",
 ))]
 hal! {
-    UART4: (uart4, pclk1, tx: (TxDma4, c3s, dma2::C3), rx: (RxDma4, c5s, dma2::C5)),
+    UART4: (uart4, pclk1, tx: (TxDma4, dma2::C3, DmaInput::Uart4Tx), rx: (RxDma4, dma2::C5, DmaInput::Uart4Rx)),
 }
 
 #[cfg(any(
@@ -892,7 +898,7 @@ hal! {
     feature = "stm32l4s9",
 ))]
 hal! {
-    UART5: (uart5, pclk1, tx: (TxDma5, c1s, dma2::C1), rx: (RxDma5, c2s, dma2::C2)),
+    UART5: (uart5, pclk1, tx: (TxDma5, dma2::C1, DmaInput::Uart5Tx), rx: (RxDma5, dma2::C2, DmaInput::Uart5Rx)),
 }
 
 impl<USART, PINS> fmt::Write for Serial<USART, PINS>
